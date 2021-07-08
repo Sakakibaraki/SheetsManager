@@ -1,6 +1,9 @@
 # VScode workspace
 *.code-workspace
 
+# sample files
+sheets/
+
 # Compiled class file
 *.class
 
