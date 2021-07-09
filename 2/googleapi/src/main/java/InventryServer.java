@@ -3,6 +3,10 @@
 import java.io.*;
 import java.net.*;
 
+import com.google.api.services.sheets.v4.Sheets;
+import com.google.api.services.sheets.v4.model.ValueRange;
+import java.util.List;
+
 public class InventryServer extends Thread {
   /* フィールド */
   //=============================================================
@@ -16,15 +20,10 @@ public class InventryServer extends Thread {
   /* コンストラクタ */
   //=============================================================
   public InventryServer(int port, Spreadsheet sheet) throws IOException {
-    System.out.println("hello1");
     this.PORT = port;
-    System.out.println("hello2");
     this.socket = new ServerSocket(PORT);
-    System.out.println("hello3");
     this.sheet = sheet;
-    System.out.println("hello4");
     this.spreadSheetId = sheet.getId();
-    System.out.println("hello5");
   }
 
   /* オーバーライドメソッド */
@@ -49,9 +48,83 @@ public class InventryServer extends Thread {
         if (str == null || str.equals("END")) break;
         if (str.equals("!getSheetInfo")) {
           printSheetInfo();
+        } else if (str.equals("!changeSheet")) {
+          // シートの設定変更
+          //=============================================================
+          out.println(str);
+          try {
+            // データ範囲の受信
+            String range = in.readLine();
+            if (range == null) throw new IOException();
+            System.out.println("range: " + range);
+            // スプレッドシートの取得
+            sheet = new Spreadsheet(this.sheet.service, this.sheet.getId(), range);
+            out.println("!sheetFound");
+          } catch (IOException e) {
+            out.println("!sheetNotFound");
+            System.out.println("Spreadsheet is not found");
+          }
+
+          // スプレッドシートの存在確認
+          if (sheet.values == null || sheet.values.isEmpty()) {
+            System.out.println("No data found.");
+            throw new IOException();
+          } else {
+            System.out.println("Found data.");
+          }
+
+        } else if (str.equals("!checkSheet")) {
+          // シートの内容確認
+          //=============================================================
+          out.println(str);
+          try {
+            if (sheet.values == null || sheet.values.isEmpty()) {
+              out.println("!dataNotFound");
+              System.out.println("No data found.");
+              throw new IOException();
+            } else {
+              System.out.println("Found data.");
+              out.println("!dataFound");
+
+              // values獲得
+              // values送信
+              ValueRange response = sheet.service.spreadsheets().values()
+                                            .get(sheet.getId(), sheet.range)
+                                              .execute();
+              List<List<Object>> values = response.getValues();
+              for (List row : values) {
+                for (Object data : row) {
+                  out.println(data);
+                }
+                out.println("!nextRow");
+              }
+              out.println("!finish");
+            }
+          } catch (IOException e) {
+            System.out.println("Spreadsheet data is not found");
+          }
+
+          // スプレッドシートの存在確認
+
+        } else if (str.equals("!editValue")) {
+          // シートの内容確認
+          //=============================================================
+          out.println(str);
+          try {
+            str = in.readLine();  // 値を書き換える場所を取得
+
+            // 値の書き換え
+
+            out.println("!dataChanged");
+            System.out.println("changed data.");
+          } catch (IOException e) {
+            out.println("!dataNotChanged");
+            System.out.println("No data changed.");
+          }
+
         } else {
           System.out.println(Thread.currentThread().getName() + " reads " + str);
-          out.println("server : " + str);
+          out.println(str);
         }
       }
 

@@ -42,7 +42,7 @@ public class ServerController {
       System.out.println("Reading spreadsheet ID and range...");
       String id = in.readLine();
       if (id == null) throw new IOException();
-      System.out.println("ID: " + id);
+      System.out.println("ID   : " + id);
       // データ範囲の受信
       String range = in.readLine();
       if (range == null) throw new IOException();
@@ -89,7 +89,6 @@ public class ServerController {
       }
 
       // 割り当てたサーバーのポート番号を送信
-      System.out.println(is.PORT);
       out.println(is.PORT);
 
       // System.out.println(is.sheetId() + ": log in");
