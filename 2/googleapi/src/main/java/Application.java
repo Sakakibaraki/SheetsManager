@@ -55,25 +55,27 @@ class Application {
     Sheets service = new Sheets.Builder(HTTP_TRANSPORT,JSON_FACTORY,getCredentials(HTTP_TRANSPORT))
                                   .setApplicationName(APPLICATION_NAME)
                                     .build();
-    System.out.println(service.DEFAULT_BASE_URL);
 
-    ServerController controller = new ServerController();
-    System.out.println("\nSheets-Manager Server start");
+    System.out.println(service.DEFAULT_BASE_URL);
+    System.out.println("Sheets-Manager Server start.");
 
     // サーバーの起動
+    ServerController controller = null;
     try {
-      controller.setServerSocket(new ServerSocket(PORT));
-      System.out.println("Started: " + controller.getServerSocket() + "\n");
+      controller = new ServerController(new ServerSocket(PORT));
+      System.out.println("Started: " + controller.ss + "\n");
       while (true) {
         // クライアントから接続を受けてサーバーを新規追加する
-        controller.add(controller.accept(service));
+        controller.servers.add(controller.accept(service));
       }
     } catch (IOException e) {
       System.out.println(e);
     } finally {
       try {
-        controller.clear();                               // サーバー群を全て閉じる
-        if (controller.getServerSocket() != null) controller.getServerSocket().close(); // メインサーバーを閉じる
+        if (controller != null) {
+          controller.clear(); // サーバー群を全て閉じる
+          controller.close(); // メインサーバーを閉じる
+        }
       } catch (IOException e) {
         System.out.println(e);
       }

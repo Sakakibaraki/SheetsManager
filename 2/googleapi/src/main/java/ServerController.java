@@ -1,4 +1,5 @@
 // package server;
+// 同一のポートに対するクライアントが複数存在するとき、一人しか読み取られない
 
 import com.google.api.services.sheets.v4.Sheets;
 
@@ -10,19 +11,25 @@ public class ServerController {
   /* フィールド */
   //=============================================================
   private static final int PORT = 8080;
-  private int size = 0;
-  private ServerSocket ss = null;
-  private Set<InventryServer> servers =
+  public ServerSocket ss = null;
+  public Set<InventryServer> servers =
       Collections.synchronizedSet(new HashSet<InventryServer>());
+
+  /* コンストラクタ */
+  //=============================================================
+  public ServerController(ServerSocket ss) {
+    this.ss = ss;
+  }
 
   /* メソッド */
   //=============================================================
   // クライアントからの接続を受けてサーバーを新規作成する
-  InventryServer accept(Sheets service) throws IOException {
+  public InventryServer accept(Sheets service) throws IOException {
     Socket socket = null;
     InventryServer is = null;
     try {
-      socket = ss.accept();               // コネクション接続要求を待つ
+      // コネクション接続要求を待つ
+      socket = ss.accept();
       System.out.println("\nConnection accepted: " + socket);
 
       BufferedReader in = new BufferedReader(
@@ -30,59 +37,84 @@ public class ServerController {
       PrintWriter out = new PrintWriter(
                           new BufferedWriter(
                             new OutputStreamWriter(socket.getOutputStream())), true);
-      System.out.println("reading spreadsheet ID...");
-      String id = in.readLine();          // スプレッドシートIDの受信
+
+      // スプレッドシートIDの受信
+      System.out.println("Reading spreadsheet ID and range...");
+      String id = in.readLine();
+      if (id == null) throw new IOException();
       System.out.println("ID: " + id);
-      System.out.println("reading spreadsheet range...");
-      // String range = in.readLine();       // スプレッドシートの読み取る範囲を受信
-      String range = null;
-      while ((range=in.readLine()) == null);
+      // データ範囲の受信
+      String range = in.readLine();
+      if (range == null) throw new IOException();
       System.out.println("range: " + range);
 
       // スプレッドシートの取得
       Spreadsheet sheet = new Spreadsheet(service, id, range);
       System.out.println("Found spreadsheet successfully");
 
+      // スプレッドシートの存在確認
+      if (sheet.values == null || sheet.values.isEmpty()) {
+        System.out.println("No data found.");
+        throw new IOException();
+      } else {
+        System.out.println("Found data.");
+      }
+
       // サーバーの割当
       //=============================================================
       // id を元に servers 内に同じ id のサーバーが存在するか調べる
-      // まずサーバーのインスタンスを新規作成する
       // id が一致するサーバーが存在したらそのインスタンスを渡す
-      is = new InventryServer(PORT, sheet);  // サーバーの新規作成
+      // 存在しなければサーバーのインスタンスを新規作成する
+      int port = 0;
       for (InventryServer server : servers) {
-        if (server.sheetId().equals(id)) {
-          is = server;
-          System.out.println("server exist.");
+        if (server.sheet.getId().equals(id)) {
+          port = server.PORT;
+          sheet = server.sheet;
+          break;
         }
       }
+      if (port > 0) {
+        is = new InventryServer(port, sheet);
+        System.out.println("sheet server exist.");
+        System.out.println("Commit Server: " + is.socket);
+      } else {
+        is = new InventryServer(PORT+servers.size()+1, sheet);
+        System.out.println("build new server.");
+        System.out.println("New Server: " + is.socket);
+      }
 
-      out.println(PORT + is.getSize());   // 指定のポート番号の送信
-      System.out.println("New Server: " + is.socket);
-      System.out.println(is.sheetId() + ": log in");
-    } catch (IOException ie) {
+      try {
+        is.start();
+      } catch (IllegalThreadStateException e) {
+      }
+
+      // 割り当てたサーバーのポート番号を送信
+      System.out.println(is.PORT);
+      out.println(is.PORT);
+
+      // System.out.println(is.sheetId() + ": log in");
+    } catch (IOException e) {
+      try {
+        if (is != null) is.socket.close();
+      } catch (IOException e2) {
+      }
     } finally {
-      socket.close();
+      try {
+        if (socket != null) socket.close();
+      } catch (IOException e) {
+      }
     }
     return is;
   }
-  // サーバーを追加する
-  void add(InventryServer is) {
-    servers.add(is);
-    size++;
-  }
   // サーバーを全て廃棄する
-  void clear() throws IOException {
-    if (size>0) {
-      for (InventryServer s: servers) {
-        s.socket.close();
-      }
-      System.out.println("closed all server-sockets");
+  public void clear() throws IOException {
+    for (InventryServer is: servers) {
+      if (is != null) is.socket.close();
     }
+    System.out.println("closed all server-sockets");
   }
-  void setServerSocket(ServerSocket ss) {
-    this.ss = ss;
-  }
-  ServerSocket getServerSocket() {
-    return ss;
+  // サーバーソケットを廃棄する
+  public void close() throws IOException {
+    if (ss != null) ss.close();
   }
 }
